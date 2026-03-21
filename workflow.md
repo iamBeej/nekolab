@@ -136,7 +136,35 @@ npx prisma migrate dev --name <migration-name>
 - `.env` stays local
 - `.env.example` should reflect required variables
 - `README.md` should stay accurate
+- project handoff logs belong in `logs/`
 - Do not commit generated local state that should remain ignored
+
+## Project Logs
+
+Use `logs/` for detailed project logs and handoff notes.
+
+Log rules:
+
+- use one Markdown file per meaningful session or milestone
+- file name format: `yyyy-mm-dd_brief-summary.md`
+- keep the summary brief, lowercase, and hyphenated
+- the internal structure can be flexible based on the work completed
+- include both:
+  - where work stopped
+  - what should happen next
+
+Good examples:
+
+- `2026-03-21_system-foundation-handoff.md`
+- `2026-03-22_workflow-hardening-pass.md`
+
+Use logs to capture:
+
+- major changes made
+- validation performed
+- important decisions
+- known issues
+- next recommended steps
 
 ## Commit Convention
 
