@@ -1,18 +1,18 @@
 # NekoLab
 
-NekoLab is a minimal system foundation built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, and SQLite.
+NekoLab now includes a deterministic expense-tracker MVP built on the existing Next.js, Prisma, and SQLite foundation.
 
-The current system loop is:
+The command flow for the MVP is:
 
-`UI -> API -> workflow service -> Prisma/SQLite -> API -> UI`
+`CLI input -> parse -> validate -> Prisma/SQLite -> output`
 
 ## Current Features
 
-- Dark dashboard UI
-- Workflow run queueing
-- Async workflow lifecycle
-- Persistent run history
-- Persistent logs tied to workflow runs
+- Command-based expense logging
+- Persistent person and expense records
+- Per-person and overall totals
+- Deterministic command processing
+- Existing workflow foundation and dashboard
 
 ## Stack
 
@@ -42,7 +42,19 @@ copy .env.example .env
 npx prisma migrate dev
 ```
 
-4. Start the dev server:
+4. Run Prisma migrations:
+
+```bash
+npx prisma migrate dev
+```
+
+5. Run an expense command:
+
+```bash
+npm run expense -- "expense add | person:Juliet | amount:500 | item:groceries"
+```
+
+6. Optional: start the existing dev server:
 
 ```bash
 npm run dev
@@ -55,6 +67,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - The local SQLite database lives at `prisma/dev.db` and is intentionally ignored by Git.
 - Prisma migrations are the source of truth for schema changes.
 - This project currently pins Prisma to v6 because the schema uses the classic SQLite `datasource.url` setup.
+- The expense tracker is intentionally deterministic and does not use AI or natural language parsing.
 
 ## Useful Commands
 
@@ -63,6 +76,7 @@ npm run dev
 npm run build
 npm run lint
 npm run test
+npm run expense -- "expense total"
 npx tsc --noEmit
 npx prisma migrate dev
 npx prisma studio
@@ -70,13 +84,21 @@ npx prisma studio
 
 ## System Model
 
-- `WorkflowRun` tracks queued, running, successful, and failed executions.
-- `Log` entries belong to a specific workflow run.
-- The dashboard shows the latest run, recent history, and logs for the selected run.
+- `Person` stores a unique person name.
+- `Expense` stores an append-only expense record with amount, item, and timestamp.
+- `WorkflowRun` and `Log` remain in the repository as part of the existing foundation work.
+
+## Supported Commands
+
+```bash
+npm run expense -- "expense add | person:Juliet | amount:500 | item:groceries"
+npm run expense -- "expense total | person:Juliet"
+npm run expense -- "expense total"
+```
 
 ## Next Areas
 
-- Background workers beyond in-process execution
-- Workflow definitions instead of a single default workflow
-- Authentication
-- Neko AI workflow generation
+- Expense editing and correction flows
+- Time-based filtering
+- Income tracking
+- Multi-domain expansion after the expense tracker is stable

@@ -48,3 +48,20 @@ model WorkflowRun {
 
   @@index([status, createdAt])
 }
+
+model Person {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  expenses Expense[]
+}
+
+model Expense {
+  id            Int      @id @default(autoincrement())
+  personId      Int
+  amountInCents Int
+  item          String
+  timestamp     DateTime @default(now())
+  person        Person   @relation(fields: [personId], references: [id], onDelete: Restrict)
+
+  @@index([personId, timestamp])
+}
