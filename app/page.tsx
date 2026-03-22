@@ -69,6 +69,16 @@ type ExpenseConsoleEntry = {
   isError: boolean;
 };
 
+type ExpenseRecord = {
+  id: number;
+  personName: string;
+  category: string;
+  amountInCents: number;
+  item: string;
+  notes: string;
+  timestamp: string;
+};
+
 const DEFAULT_EXPENSE_COMMAND =
   "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run";
 
@@ -108,6 +118,7 @@ export default function Home() {
   const [expenseConsoleEntries, setExpenseConsoleEntries] = useState<
     ExpenseConsoleEntry[]
   >([]);
+  const [expenseRecords, setExpenseRecords] = useState<ExpenseRecord[]>([]);
   const [isExpenseSubmitting, setIsExpenseSubmitting] = useState(false);
 
   function commitWorkflowDefinitions(nextWorkflowDefinitions: WorkflowDefinition[]) {
@@ -200,11 +211,22 @@ export default function Home() {
     }
   }
 
+  async function refreshExpenseRecords() {
+    try {
+      const records = await fetchJson<ExpenseRecord[]>("/api/expense/records");
+      setExpenseRecords(records);
+    } catch (error) {
+      console.error("Failed to load expense records", error);
+    }
+  }
+
   const loadInitialDashboard = useEffectEvent(async () => {
     try {
-      const [workflowDefinitionsResult, dashboard] = await Promise.all([
+      const [workflowDefinitionsResult, dashboard, expenseRecordsResult] =
+        await Promise.all([
         fetchJson<WorkflowDefinition[]>("/api/workflow/definitions"),
         loadDashboardData(null),
+        fetchJson<ExpenseRecord[]>("/api/expense/records"),
       ]);
 
       startTransition(() => {
@@ -215,6 +237,7 @@ export default function Home() {
           dashboard.selectedRun,
           dashboard.selectedRunId,
         );
+        setExpenseRecords(expenseRecordsResult);
       });
     } catch (error) {
       console.error("Failed to load dashboard", error);
@@ -351,6 +374,7 @@ export default function Home() {
         },
         ...currentEntries,
       ]);
+      await refreshExpenseRecords();
     } catch (error) {
       setExpenseConsoleEntries((currentEntries) => [
         {
@@ -482,6 +506,55 @@ export default function Home() {
           ) : (
             <div className="rounded-lg border border-dashed border-white/10 px-4 py-3 text-sm text-white/50">
               No expense commands run yet.
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 space-y-3">
+          <h3 className="text-sm uppercase tracking-[0.18em] text-white/45">
+            Stored Expense Records
+          </h3>
+          {expenseRecords.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border border-white/10">
+              <table className="min-w-full border-collapse text-left text-sm text-white/80">
+                <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-white/45">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">ID</th>
+                    <th className="px-4 py-3 font-medium">Person</th>
+                    <th className="px-4 py-3 font-medium">Category</th>
+                    <th className="px-4 py-3 font-medium">Amount</th>
+                    <th className="px-4 py-3 font-medium">Item</th>
+                    <th className="px-4 py-3 font-medium">Notes</th>
+                    <th className="px-4 py-3 font-medium">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenseRecords.map((expenseRecord) => (
+                    <tr
+                      key={expenseRecord.id}
+                      className="border-t border-white/10 align-top"
+                    >
+                      <td className="px-4 py-3 font-mono text-xs text-white/55">
+                        {expenseRecord.id}
+                      </td>
+                      <td className="px-4 py-3">{expenseRecord.personName}</td>
+                      <td className="px-4 py-3">{expenseRecord.category}</td>
+                      <td className="px-4 py-3">
+                        {expenseRecord.amountInCents / 100}
+                      </td>
+                      <td className="px-4 py-3">{expenseRecord.item}</td>
+                      <td className="px-4 py-3">{expenseRecord.notes}</td>
+                      <td className="px-4 py-3 text-xs text-white/55">
+                        {formatTimestamp(expenseRecord.timestamp)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-white/10 px-4 py-3 text-sm text-white/50">
+              No stored expense records yet.
             </div>
           )}
         </div>

@@ -13,10 +13,12 @@ import {
 } from "vitest";
 
 import { POST as runExpenseCommandRoute } from "@/app/api/expense/command/route";
+import { GET as listExpenseRecordsRoute } from "@/app/api/expense/records/route";
 import {
   disconnectExpenseTracker,
   executeExpenseCommand,
 } from "@/lib/expense-tracker.mjs";
+import { prisma } from "@/lib/prisma";
 import { prismaRuntime } from "@/lib/prisma-runtime.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -76,6 +78,7 @@ describe.sequential("expense tracker commands", () => {
 
   afterAll(async () => {
     await disconnectExpenseTracker();
+    await prisma.$disconnect();
 
     if (fs.existsSync(testDatabasePath)) {
       fs.rmSync(testDatabasePath);
@@ -196,5 +199,35 @@ describe.sequential("expense tracker commands", () => {
 
     expect(response.status).toBe(400);
     expect(body.message).toBe("Missing required field 'category'");
+  });
+
+  test("lists stored expense records through the web route", async () => {
+    await executeExpenseCommand(
+      "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run",
+    );
+    await executeExpenseCommand(
+      "expense add | person:Romeo | category:transport | amount:150 | item:taxi | notes:late night ride",
+    );
+
+    const response = await listExpenseRecordsRoute();
+    const body = (await response.json()) as Array<{
+      id: number;
+      personName: string;
+      category: string;
+      amountInCents: number;
+      item: string;
+      notes: string;
+      timestamp: string;
+    }>;
+
+    expect(response.status).toBe(200);
+    expect(body).toHaveLength(2);
+    expect(body[0]?.personName).toBe("Romeo");
+    expect(body[0]?.category).toBe("transport");
+    expect(body[0]?.amountInCents).toBe(15000);
+    expect(body[0]?.item).toBe("taxi");
+    expect(body[0]?.notes).toBe("late night ride");
+    expect(body[0]?.timestamp).toMatch(/^20\d{2}-\d{2}-\d{2}T/);
+    expect(body[1]?.personName).toBe("Juliet");
   });
 });
