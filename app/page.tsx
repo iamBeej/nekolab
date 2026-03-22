@@ -81,6 +81,11 @@ type ExpenseRecord = {
 
 const DEFAULT_EXPENSE_COMMAND =
   "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run";
+const PHILIPPINE_PESO_SYMBOL = "\u20b1";
+const PHILIPPINE_PESO_TABLE_FORMATTER = new Intl.NumberFormat("en-PH", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 function formatTimestamp(value: string | null) {
   if (!value) {
@@ -88,6 +93,45 @@ function formatTimestamp(value: string | null) {
   }
 
   return new Date(value).toLocaleString();
+}
+
+function formatPesoForTable(amountInCents: number) {
+  return `${PHILIPPINE_PESO_SYMBOL}${PHILIPPINE_PESO_TABLE_FORMATTER.format(
+    amountInCents / 100,
+  )}`;
+}
+
+function formatTitleCase(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => {
+      const [firstCharacter = "", ...remainingCharacters] = part.toLowerCase();
+
+      return `${firstCharacter.toUpperCase()}${remainingCharacters.join("")}`;
+    })
+    .join(" ");
+}
+
+function formatSentenceCase(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "N/A";
+  }
+
+  return `${trimmedValue.charAt(0).toUpperCase()}${trimmedValue.slice(1)}`;
+}
+
+function formatExpenseTimestamp(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function runSummaryFromRun(run: WorkflowRun): WorkflowRunSummary {
@@ -515,42 +559,52 @@ export default function Home() {
             Stored Expense Records
           </h3>
           {expenseRecords.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-white/10">
-              <table className="min-w-full border-collapse text-left text-sm text-white/80">
-                <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-white/45">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">ID</th>
-                    <th className="px-4 py-3 font-medium">Person</th>
-                    <th className="px-4 py-3 font-medium">Category</th>
-                    <th className="px-4 py-3 font-medium">Amount</th>
-                    <th className="px-4 py-3 font-medium">Item</th>
-                    <th className="px-4 py-3 font-medium">Notes</th>
-                    <th className="px-4 py-3 font-medium">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {expenseRecords.map((expenseRecord) => (
-                    <tr
-                      key={expenseRecord.id}
-                      className="border-t border-white/10 align-top"
-                    >
-                      <td className="px-4 py-3 font-mono text-xs text-white/55">
-                        {expenseRecord.id}
-                      </td>
-                      <td className="px-4 py-3">{expenseRecord.personName}</td>
-                      <td className="px-4 py-3">{expenseRecord.category}</td>
-                      <td className="px-4 py-3">
-                        {expenseRecord.amountInCents / 100}
-                      </td>
-                      <td className="px-4 py-3">{expenseRecord.item}</td>
-                      <td className="px-4 py-3">{expenseRecord.notes}</td>
-                      <td className="px-4 py-3 text-xs text-white/55">
-                        {formatTimestamp(expenseRecord.timestamp)}
-                      </td>
+            <div className="overflow-hidden rounded-lg border border-white/10">
+              <div className="max-h-[31rem] overflow-auto">
+                <table className="min-w-full border-collapse text-left text-sm text-white/80">
+                  <thead className="sticky top-0 z-10 bg-zinc-950 text-xs uppercase tracking-[0.18em] text-white/45">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">ID</th>
+                      <th className="px-4 py-3 font-medium">Person</th>
+                      <th className="px-4 py-3 font-medium">Category</th>
+                      <th className="px-4 py-3 font-medium">Amount</th>
+                      <th className="px-4 py-3 font-medium">Item</th>
+                      <th className="px-4 py-3 font-medium">Notes</th>
+                      <th className="px-4 py-3 font-medium">Timestamp</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {expenseRecords.map((expenseRecord) => (
+                      <tr
+                        key={expenseRecord.id}
+                        className="border-t border-white/10 align-top"
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-white/55">
+                          {expenseRecord.id}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatTitleCase(expenseRecord.personName)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatTitleCase(expenseRecord.category)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatPesoForTable(expenseRecord.amountInCents)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatTitleCase(expenseRecord.item)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {formatSentenceCase(expenseRecord.notes)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-white/55">
+                          {formatExpenseTimestamp(expenseRecord.timestamp)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-white/10 px-4 py-3 text-sm text-white/50">
