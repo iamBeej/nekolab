@@ -192,12 +192,65 @@ The backend and route behavior have automated coverage, but the browser interact
 
 ## What Should Happen Next
 
-Recommended next order:
+Immediate next recommendations for the next session:
 
-1. add a small browser-level test pass for the expense page interactions, especially multi-select filters and popover behavior
-2. decide whether the legacy expense command route should remain supported or be treated as an internal compatibility path only
-3. decide whether the expense tracker stays embedded in `app/page.tsx` or should be split into a focused expense component once further UI work is requested
-4. keep `plans/expense-tracker.md` aligned with the real product surface as the expense tracker evolves
+### 1. Stabilize the current system
+
+- ensure expense entries remain accurate and consistent
+- verify that totals always match stored records
+- fix any remaining UI inconsistencies around filters and table behavior
+
+### 2. Define a small set of core metrics
+
+Limit the first metrics pass to decision-relevant outputs only:
+
+- total expenses for the current week
+- total expenses for the current month
+- expenses per person
+- current week versus previous week comparison
+- recent expenses for the last 5 to 10 entries
+
+### 3. Add simple insight outputs without introducing a new dashboard
+
+Prefer text outputs over new chart or dashboard work.
+
+Examples:
+
+- `This week: ₱X (↑ ₱Y vs last week)`
+- `Top spending: <person/category>`
+- `Recent activity: ₱X across N entries`
+
+### 4. Validate daily usage
+
+The next pass should verify that the system remains practical in everyday use:
+
+- expense logging in less than 10 seconds
+- easy review of totals and recent activity
+- no confusion when reading data
+
+### 5. Keep these deferred
+
+Do not implement yet:
+
+- charts or dashboards
+- AI or Winter-related features
+- external integrations
+- multi-domain expansion such as tasks, plans, or income
+- automation
+
+### Guiding principle
+
+Focus on:
+
+- accuracy
+- simplicity
+- daily usability
+
+Do not expand the feature surface until:
+
+- data is reliable
+- metrics are useful
+- the system is being used consistently
 
 ## Closing Note
 

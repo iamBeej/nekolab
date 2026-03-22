@@ -143,11 +143,16 @@ The backend and routes have automated coverage, but the expense page interaction
 
 Recommended next order:
 
-1. add a browser-level test pass for expense page interactions, especially form submission, multi-select filters, and popover behavior
-2. decide whether the legacy command route should remain publicly supported or be treated as internal compatibility only
-3. extract the expense section from `app/page.tsx` into a focused component if the UI keeps growing
-4. decide whether table filtering should later include reset affordances, result counts per selected filter, or saved views
-5. update this document whenever the expense tracker meaningfully changes so it stays aligned with the repo
+1. stabilize the current system by checking entry accuracy, totals consistency, and remaining filter or table issues
+2. define a small core metrics set limited to:
+   - total expenses for the current week
+   - total expenses for the current month
+   - expenses per person
+   - current week versus previous week comparison
+   - recent expenses for the last 5 to 10 entries
+3. add simple text-based insight outputs instead of introducing a new dashboard surface
+4. validate daily usage against the practical goals of fast logging, easy review, and clear data reading
+5. keep this document aligned whenever the expense tracker changes meaningfully
 
 ## Still Out Of Scope
 
@@ -160,6 +165,7 @@ Do not treat these as active work unless the user explicitly changes direction:
 - income tracking
 - receipt or image processing
 - other domains such as tasks, plans, or calendar
+- automation
 
 ## Success Markers
 
@@ -169,4 +175,5 @@ The current expense tracker is in a good state if:
 - stored records stay accurate and append-only
 - totals remain correct
 - browser entry and table browsing feel stable
+- core metrics are useful for daily decisions
 - documentation stays aligned with the actual implementation
