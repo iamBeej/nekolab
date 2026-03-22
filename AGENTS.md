@@ -4,4 +4,4 @@
 This version has breaking changes. APIs, conventions, and file structure may differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-See `workflow.md` for the repository-wide coding agent guide, including architecture rules, validation steps, and commit conventions.
+See `session-guide.md` for the repository-wide coding agent guide, including architecture rules, validation steps, and commit conventions.

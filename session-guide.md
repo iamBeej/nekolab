@@ -115,6 +115,18 @@ Use these as the default locations:
 - Avoid premature component extraction for very small UI sections
 - Avoid introducing multiple patterns for the same concern
 
+## Session Alignment Check
+
+Before starting substantial new work, read the most recent project logs in `logs/`.
+
+Use those logs to check:
+
+- what the previous session said should happen next
+- whether the current task is still aligned with that plan
+- whether the work has started to drift from the intended priority order
+
+If the work is diverging from the logged plan, call that out explicitly before continuing.
+
 ## Validation Checklist
 
 After meaningful changes, validate with:
@@ -142,6 +154,21 @@ npx prisma migrate dev --name <migration-name>
 ## Project Logs
 
 Use `logs/` for detailed project logs and handoff notes.
+
+### Session-end logging rule
+
+Create a session log when the user signals that the current work session is ending.
+
+Examples of valid signals:
+
+- the user says to stop for now
+- the user asks for a handoff
+- the user indicates the session is done
+- the user asks to continue later
+
+Do not create a session log just because work paused briefly during the same session.
+
+The trigger comes from the user, not from the agent making its own assumption that the session has ended.
 
 Log rules:
 
@@ -201,6 +228,16 @@ Allowed commit types:
 - `docs` for documentation-only changes
 - `test` for test additions or test-only updates
 - `chore` for maintenance, cleanup, config, or dependency work
+
+### Resolved issue checkpoint rule
+
+If a discrete issue has been resolved, the agent should propose a commit for that completed unit of work.
+
+Treat it as a checkpoint commit, but use a valid commit type from the allowed list above.
+
+Do not use `checkpoint` as the commit type.
+
+Use the normal conventional title format, and note in the commit body that the change represents a checkpoint after resolving the issue.
 
 Commit summary rules:
 

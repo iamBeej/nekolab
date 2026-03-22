@@ -155,7 +155,7 @@ The repo was cleaned up before the first push.
 Changes made:
 
 - replaced the default README with NekoLab-specific setup notes
-- added `workflow.md` as the repo guide for AI coding agents
+- added `session-guide.md` as the repo guide for AI coding agents
 - added `.env.example`
 - updated `.gitignore`
 - ignored local SQLite database files
@@ -186,7 +186,7 @@ Logic and storage files:
 Project guidance:
 
 - `README.md`
-- `workflow.md`
+- `session-guide.md`
 - `AGENTS.md`
 
 ## Validation Performed
