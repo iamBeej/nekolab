@@ -42,19 +42,19 @@ copy .env.example .env
 npx prisma migrate dev
 ```
 
-4. Run an expense command:
-
-```bash
-npm run expense -- "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run"
-```
-
-5. Optional: start the existing dev server:
+4. Start the app:
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+5. Open the website at [http://localhost:3000](http://localhost:3000) and use the `Expenses` console section.
+
+6. Optional: run the same expense flow from the CLI:
+
+```bash
+npm run expense -- "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run"
+```
 
 ## Important Notes
 
@@ -62,6 +62,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - Prisma migrations are the source of truth for schema changes.
 - This project currently pins Prisma to v6 because the schema uses the classic SQLite `datasource.url` setup.
 - The expense tracker is intentionally deterministic and does not use AI or natural language parsing.
+- The website now exposes the same expense command engine through the `Expenses` console section.
 
 ## Useful Commands
 

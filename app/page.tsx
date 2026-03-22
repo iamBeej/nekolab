@@ -11,6 +11,11 @@ const ACTIVE_WORKFLOW_RUN_STATUSES = new Set(["pending", "running"]);
 
 const sections = [
   {
+    id: "expenses",
+    title: "Expenses",
+    description: "Run deterministic expense commands from the browser",
+  },
+  {
     id: "workflows",
     title: "Workflows",
     description: "Execute and monitor automation jobs",
@@ -58,6 +63,15 @@ type WorkflowDefinition = {
   description: string;
 };
 
+type ExpenseConsoleEntry = {
+  command: string;
+  output: string;
+  isError: boolean;
+};
+
+const DEFAULT_EXPENSE_COMMAND =
+  "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run";
+
 function formatTimestamp(value: string | null) {
   if (!value) {
     return "N/A";
@@ -90,6 +104,11 @@ export default function Home() {
   const [selectedRun, setSelectedRun] = useState<WorkflowRun | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expenseCommand, setExpenseCommand] = useState(DEFAULT_EXPENSE_COMMAND);
+  const [expenseConsoleEntries, setExpenseConsoleEntries] = useState<
+    ExpenseConsoleEntry[]
+  >([]);
+  const [isExpenseSubmitting, setIsExpenseSubmitting] = useState(false);
 
   function commitWorkflowDefinitions(nextWorkflowDefinitions: WorkflowDefinition[]) {
     setWorkflowDefinitions(nextWorkflowDefinitions);
@@ -285,12 +304,190 @@ export default function Home() {
     await refreshDashboard(runId);
   }
 
+  async function handleExpenseCommand() {
+    const command = expenseCommand.trim();
+
+    if (!command) {
+      setExpenseConsoleEntries((currentEntries) => [
+        {
+          command: "",
+          output: "Command is required",
+          isError: true,
+        },
+        ...currentEntries,
+      ]);
+      return;
+    }
+
+    setIsExpenseSubmitting(true);
+
+    try {
+      const response = await fetch("/api/expense/command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          command,
+        }),
+      });
+      const responseBody = (await response.json()) as
+        | { output: string }
+        | { message: string };
+
+      if (!response.ok || "message" in responseBody) {
+        throw new Error(
+          "message" in responseBody
+            ? responseBody.message
+            : "Failed to execute expense command",
+        );
+      }
+
+      setExpenseConsoleEntries((currentEntries) => [
+        {
+          command,
+          output: responseBody.output,
+          isError: false,
+        },
+        ...currentEntries,
+      ]);
+    } catch (error) {
+      setExpenseConsoleEntries((currentEntries) => [
+        {
+          command,
+          output:
+            error instanceof Error
+              ? error.message
+              : "Unknown expense command error",
+          isError: true,
+        },
+        ...currentEntries,
+      ]);
+    } finally {
+      setIsExpenseSubmitting(false);
+    }
+  }
+
   const displayedRun = selectedRun ?? latestRun;
   const displayedLogs = displayedRun?.logs ?? [];
   const selectedWorkflowDefinition =
     workflowDefinitions.find(
       (workflowDefinition) => workflowDefinition.id === selectedWorkflowId,
     ) ?? workflowDefinitions[0] ?? null;
+
+  function renderExpenseSection() {
+    return (
+      <>
+        <div className="mt-4 rounded-lg border border-white/10 bg-black/60 p-4">
+          <label
+            htmlFor="expense-command"
+            className="text-xs uppercase tracking-[0.18em] text-white/45"
+          >
+            Command Console
+          </label>
+          <textarea
+            id="expense-command"
+            value={expenseCommand}
+            onChange={(event) => {
+              setExpenseCommand(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (
+                (event.ctrlKey || event.metaKey) &&
+                (event.key === "Enter" || event.key === "NumpadEnter")
+              ) {
+                event.preventDefault();
+                void handleExpenseCommand();
+              }
+            }}
+            spellCheck={false}
+            rows={5}
+            className="mt-3 w-full rounded-lg border border-white/10 bg-black px-3 py-3 font-mono text-sm text-white outline-none transition focus:border-white/30"
+          />
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-white/45">
+            <button
+              type="button"
+              onClick={() => {
+                setExpenseCommand(DEFAULT_EXPENSE_COMMAND);
+              }}
+              className="rounded-md border border-white/10 px-2 py-1 transition hover:bg-white/5"
+            >
+              Fill add example
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExpenseCommand("expense total | person:Juliet");
+              }}
+              className="rounded-md border border-white/10 px-2 py-1 transition hover:bg-white/5"
+            >
+              Fill person total
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExpenseCommand("expense total");
+              }}
+              className="rounded-md border border-white/10 px-2 py-1 transition hover:bg-white/5"
+            >
+              Fill overall total
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-white/45">
+            Use <span className="font-mono">Ctrl</span> or{" "}
+            <span className="font-mono">Cmd</span> +{" "}
+            <span className="font-mono">Enter</span> to run the command.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            void handleExpenseCommand();
+          }}
+          disabled={isExpenseSubmitting}
+          className="mt-4 rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isExpenseSubmitting ? "Running..." : "Run Expense Command"}
+        </button>
+
+        <div className="mt-4 space-y-3">
+          <h3 className="text-sm uppercase tracking-[0.18em] text-white/45">
+            Console Output
+          </h3>
+          {expenseConsoleEntries.length > 0 ? (
+            <ul className="space-y-3">
+              {expenseConsoleEntries.map((entry, index) => (
+                <li
+                  key={`${entry.command}-${index}`}
+                  className={`rounded-lg border p-4 ${
+                    entry.isError
+                      ? "border-red-400/30 bg-red-400/5"
+                      : "border-white/10 bg-black/40"
+                  }`}
+                >
+                  <p className="font-mono text-xs text-white/45">
+                    {entry.command || "(empty command)"}
+                  </p>
+                  <pre
+                    className={`mt-3 whitespace-pre-wrap font-mono text-sm ${
+                      entry.isError ? "text-red-200" : "text-white/85"
+                    }`}
+                  >
+                    {entry.output}
+                  </pre>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="rounded-lg border border-dashed border-white/10 px-4 py-3 text-sm text-white/50">
+              No expense commands run yet.
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
 
   function renderWorkflowSection() {
     return (
@@ -454,6 +651,10 @@ export default function Home() {
   }
 
   function renderSection(sectionId: string) {
+    if (sectionId === "expenses") {
+      return renderExpenseSection();
+    }
+
     if (sectionId === "workflows") {
       return renderWorkflowSection();
     }

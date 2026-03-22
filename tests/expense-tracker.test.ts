@@ -12,6 +12,7 @@ import {
   test,
 } from "vitest";
 
+import { POST as runExpenseCommandRoute } from "@/app/api/expense/command/route";
 import {
   disconnectExpenseTracker,
   executeExpenseCommand,
@@ -158,5 +159,42 @@ describe.sequential("expense tracker commands", () => {
     });
 
     expect(stdout.trim()).toBe("[OK] Expense added\nJuliet total: \u20b1500");
+  });
+
+  test("runs an expense command through the web route", async () => {
+    const response = await runExpenseCommandRoute(
+      new Request("http://localhost/api/expense/command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          command:
+            "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run",
+        }),
+      }),
+    );
+    const body = (await response.json()) as { output: string };
+
+    expect(response.status).toBe(200);
+    expect(body.output).toBe("[OK] Expense added\nJuliet total: \u20b1500");
+  });
+
+  test("returns route validation errors for invalid expense commands", async () => {
+    const response = await runExpenseCommandRoute(
+      new Request("http://localhost/api/expense/command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          command: "expense add | person:Juliet | amount:500 | item:groceries",
+        }),
+      }),
+    );
+    const body = (await response.json()) as { message: string };
+
+    expect(response.status).toBe(400);
+    expect(body.message).toBe("Missing required field 'category'");
   });
 });
