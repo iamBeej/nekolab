@@ -49,8 +49,8 @@ npm run dev
 ```
 
 5. Open the website at [http://localhost:3000](http://localhost:3000) and use the `Expenses` section for:
-   - command entry
-   - console output
+   - manual expense entry fields
+   - submission feedback
    - the stored expense records table
 
 6. Optional: run the same expense flow from the CLI:
@@ -65,7 +65,7 @@ npm run expense -- "expense add | person:Juliet | category:food | amount:500 | i
 - Prisma migrations are the source of truth for schema changes.
 - This project currently pins Prisma to v6 because the schema uses the classic SQLite `datasource.url` setup.
 - The expense tracker is intentionally deterministic and does not use AI or natural language parsing.
-- The website now exposes the same expense command engine and a stored expense records table through the `Expenses` section.
+- The website now exposes manual expense entry and a stored expense records table through the `Expenses` section.
 
 ## Useful Commands
 

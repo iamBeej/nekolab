@@ -13,7 +13,7 @@ const sections = [
   {
     id: "expenses",
     title: "Expenses",
-    description: "Run deterministic expense commands from the browser",
+    description: "Enter expenses manually and review stored records",
   },
   {
     id: "workflows",
@@ -63,10 +63,19 @@ type WorkflowDefinition = {
   description: string;
 };
 
-type ExpenseConsoleEntry = {
-  command: string;
-  output: string;
-  isError: boolean;
+type ExpenseFormState = {
+  personName: string;
+  category: string;
+  amount: string;
+  item: string;
+  notes: string;
+};
+
+type ExpenseSubmissionState = {
+  kind: "idle" | "success" | "error";
+  message: string;
+  personName?: string;
+  personTotalInCents?: number;
 };
 
 type ExpenseRecord = {
@@ -79,8 +88,13 @@ type ExpenseRecord = {
   timestamp: string;
 };
 
-const DEFAULT_EXPENSE_COMMAND =
-  "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run";
+const EMPTY_EXPENSE_FORM: ExpenseFormState = {
+  personName: "",
+  category: "",
+  amount: "",
+  item: "",
+  notes: "",
+};
 const PHILIPPINE_PESO_SYMBOL = "\u20b1";
 const PHILIPPINE_PESO_TABLE_FORMATTER = new Intl.NumberFormat("en-PH", {
   minimumFractionDigits: 2,
@@ -99,6 +113,10 @@ function formatPesoForTable(amountInCents: number) {
   return `${PHILIPPINE_PESO_SYMBOL}${PHILIPPINE_PESO_TABLE_FORMATTER.format(
     amountInCents / 100,
   )}`;
+}
+
+function formatPeso(amountInCents: number) {
+  return formatPesoForTable(amountInCents);
 }
 
 function formatTitleCase(value: string) {
@@ -158,10 +176,13 @@ export default function Home() {
   const [selectedRun, setSelectedRun] = useState<WorkflowRun | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [expenseCommand, setExpenseCommand] = useState(DEFAULT_EXPENSE_COMMAND);
-  const [expenseConsoleEntries, setExpenseConsoleEntries] = useState<
-    ExpenseConsoleEntry[]
-  >([]);
+  const [expenseForm, setExpenseForm] =
+    useState<ExpenseFormState>(EMPTY_EXPENSE_FORM);
+  const [expenseSubmissionState, setExpenseSubmissionState] =
+    useState<ExpenseSubmissionState>({
+      kind: "idle",
+      message: "",
+    });
   const [expenseRecords, setExpenseRecords] = useState<ExpenseRecord[]>([]);
   const [isExpenseSubmitting, setIsExpenseSubmitting] = useState(false);
 
@@ -371,66 +392,47 @@ export default function Home() {
     await refreshDashboard(runId);
   }
 
-  async function handleExpenseCommand() {
-    const command = expenseCommand.trim();
-
-    if (!command) {
-      setExpenseConsoleEntries((currentEntries) => [
-        {
-          command: "",
-          output: "Command is required",
-          isError: true,
-        },
-        ...currentEntries,
-      ]);
-      return;
-    }
-
+  async function handleExpenseSubmit() {
     setIsExpenseSubmitting(true);
 
     try {
-      const response = await fetch("/api/expense/command", {
+      const response = await fetch("/api/expense/entries", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          command,
-        }),
+        body: JSON.stringify(expenseForm),
       });
       const responseBody = (await response.json()) as
-        | { output: string }
+        | {
+            message: string;
+            personName: string;
+            personTotalInCents: number;
+          }
         | { message: string };
 
-      if (!response.ok || "message" in responseBody) {
+      if (!response.ok || !("personName" in responseBody)) {
         throw new Error(
-          "message" in responseBody
-            ? responseBody.message
-            : "Failed to execute expense command",
+          responseBody.message || "Failed to save expense entry",
         );
       }
 
-      setExpenseConsoleEntries((currentEntries) => [
-        {
-          command,
-          output: responseBody.output,
-          isError: false,
-        },
-        ...currentEntries,
-      ]);
+      setExpenseSubmissionState({
+        kind: "success",
+        message: responseBody.message,
+        personName: responseBody.personName,
+        personTotalInCents: responseBody.personTotalInCents,
+      });
+      setExpenseForm(EMPTY_EXPENSE_FORM);
       await refreshExpenseRecords();
     } catch (error) {
-      setExpenseConsoleEntries((currentEntries) => [
-        {
-          command,
-          output:
-            error instanceof Error
-              ? error.message
-              : "Unknown expense command error",
-          isError: true,
-        },
-        ...currentEntries,
-      ]);
+      setExpenseSubmissionState({
+        kind: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unknown expense entry error",
+      });
     } finally {
       setIsExpenseSubmitting(false);
     }
@@ -447,109 +449,124 @@ export default function Home() {
     return (
       <>
         <div className="mt-4 rounded-lg border border-white/10 bg-black/60 p-4">
-          <label
-            htmlFor="expense-command"
-            className="text-xs uppercase tracking-[0.18em] text-white/45"
-          >
-            Command Console
-          </label>
-          <textarea
-            id="expense-command"
-            value={expenseCommand}
-            onChange={(event) => {
-              setExpenseCommand(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (
-                (event.ctrlKey || event.metaKey) &&
-                (event.key === "Enter" || event.key === "NumpadEnter")
-              ) {
-                event.preventDefault();
-                void handleExpenseCommand();
-              }
-            }}
-            spellCheck={false}
-            rows={5}
-            className="mt-3 w-full rounded-lg border border-white/10 bg-black px-3 py-3 font-mono text-sm text-white outline-none transition focus:border-white/30"
-          />
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-white/45">
-            <button
-              type="button"
-              onClick={() => {
-                setExpenseCommand(DEFAULT_EXPENSE_COMMAND);
-              }}
-              className="rounded-md border border-white/10 px-2 py-1 transition hover:bg-white/5"
-            >
-              Fill add example
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setExpenseCommand("expense total | person:Juliet");
-              }}
-              className="rounded-md border border-white/10 px-2 py-1 transition hover:bg-white/5"
-            >
-              Fill person total
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setExpenseCommand("expense total");
-              }}
-              className="rounded-md border border-white/10 px-2 py-1 transition hover:bg-white/5"
-            >
-              Fill overall total
-            </button>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs uppercase tracking-[0.18em] text-white/45">
+                Person
+              </span>
+              <input
+                value={expenseForm.personName}
+                onChange={(event) => {
+                  setExpenseForm((currentForm) => ({
+                    ...currentForm,
+                    personName: event.target.value,
+                  }));
+                }}
+                className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs uppercase tracking-[0.18em] text-white/45">
+                Category
+              </span>
+              <input
+                value={expenseForm.category}
+                onChange={(event) => {
+                  setExpenseForm((currentForm) => ({
+                    ...currentForm,
+                    category: event.target.value,
+                  }));
+                }}
+                className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs uppercase tracking-[0.18em] text-white/45">
+                Amount
+              </span>
+              <input
+                value={expenseForm.amount}
+                onChange={(event) => {
+                  setExpenseForm((currentForm) => ({
+                    ...currentForm,
+                    amount: event.target.value,
+                  }));
+                }}
+                inputMode="decimal"
+                className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs uppercase tracking-[0.18em] text-white/45">
+                Item
+              </span>
+              <input
+                value={expenseForm.item}
+                onChange={(event) => {
+                  setExpenseForm((currentForm) => ({
+                    ...currentForm,
+                    item: event.target.value,
+                  }));
+                }}
+                className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-white/30"
+              />
+            </label>
           </div>
-          <p className="mt-3 text-xs text-white/45">
-            Use <span className="font-mono">Ctrl</span> or{" "}
-            <span className="font-mono">Cmd</span> +{" "}
-            <span className="font-mono">Enter</span> to run the command.
-          </p>
+
+          <label className="mt-4 block space-y-2">
+            <span className="text-xs uppercase tracking-[0.18em] text-white/45">
+              Notes
+            </span>
+            <textarea
+              value={expenseForm.notes}
+              onChange={(event) => {
+                setExpenseForm((currentForm) => ({
+                  ...currentForm,
+                  notes: event.target.value,
+                }));
+              }}
+              rows={4}
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-3 text-sm text-white outline-none transition focus:border-white/30"
+            />
+          </label>
         </div>
 
         <button
           type="button"
           onClick={() => {
-            void handleExpenseCommand();
+            void handleExpenseSubmit();
           }}
           disabled={isExpenseSubmitting}
           className="mt-4 rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isExpenseSubmitting ? "Running..." : "Run Expense Command"}
+          {isExpenseSubmitting ? "Saving..." : "Add Expense"}
         </button>
 
         <div className="mt-4 space-y-3">
           <h3 className="text-sm uppercase tracking-[0.18em] text-white/45">
-            Console Output
+            Submission Status
           </h3>
-          {expenseConsoleEntries.length > 0 ? (
-            <ul className="space-y-3">
-              {expenseConsoleEntries.map((entry, index) => (
-                <li
-                  key={`${entry.command}-${index}`}
-                  className={`rounded-lg border p-4 ${
-                    entry.isError
-                      ? "border-red-400/30 bg-red-400/5"
-                      : "border-white/10 bg-black/40"
-                  }`}
-                >
-                  <p className="font-mono text-xs text-white/45">
-                    {entry.command || "(empty command)"}
-                  </p>
-                  <pre
-                    className={`mt-3 whitespace-pre-wrap font-mono text-sm ${
-                      entry.isError ? "text-red-200" : "text-white/85"
-                    }`}
-                  >
-                    {entry.output}
-                  </pre>
-                </li>
-              ))}
-            </ul>
+          {expenseSubmissionState.kind === "success" ? (
+            <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
+              <p>{expenseSubmissionState.message}</p>
+              {expenseSubmissionState.personName &&
+              typeof expenseSubmissionState.personTotalInCents === "number" ? (
+                <p className="mt-2 text-white/75">
+                  {expenseSubmissionState.personName} total:{" "}
+                  {formatPeso(expenseSubmissionState.personTotalInCents)}
+                </p>
+              ) : null}
+            </div>
+          ) : expenseSubmissionState.kind === "error" ? (
+            <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-4 py-3 text-sm text-red-200">
+              {expenseSubmissionState.message}
+            </div>
           ) : (
             <div className="rounded-lg border border-dashed border-white/10 px-4 py-3 text-sm text-white/50">
-              No expense commands run yet.
+              No expense submitted yet.
             </div>
           )}
         </div>

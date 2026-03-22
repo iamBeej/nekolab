@@ -12,6 +12,7 @@ import {
   test,
 } from "vitest";
 
+import { POST as createExpenseEntryRoute } from "@/app/api/expense/entries/route";
 import { POST as runExpenseCommandRoute } from "@/app/api/expense/command/route";
 import { GET as listExpenseRecordsRoute } from "@/app/api/expense/records/route";
 import {
@@ -183,6 +184,34 @@ describe.sequential("expense tracker commands", () => {
     expect(body.output).toBe("[OK] Expense added\nJuliet total: \u20b1500");
   });
 
+  test("creates an expense through the structured entry route", async () => {
+    const response = await createExpenseEntryRoute(
+      new Request("http://localhost/api/expense/entries", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personName: "Juliet",
+          category: "food",
+          amount: "500",
+          item: "groceries",
+          notes: "weekly market run",
+        }),
+      }),
+    );
+    const body = (await response.json()) as {
+      message: string;
+      personName: string;
+      personTotalInCents: number;
+    };
+
+    expect(response.status).toBe(201);
+    expect(body.message).toBe("[OK] Expense added");
+    expect(body.personName).toBe("Juliet");
+    expect(body.personTotalInCents).toBe(50000);
+  });
+
   test("returns route validation errors for invalid expense commands", async () => {
     const response = await runExpenseCommandRoute(
       new Request("http://localhost/api/expense/command", {
@@ -199,6 +228,28 @@ describe.sequential("expense tracker commands", () => {
 
     expect(response.status).toBe(400);
     expect(body.message).toBe("Missing required field 'category'");
+  });
+
+  test("returns structured entry validation errors for invalid expense input", async () => {
+    const response = await createExpenseEntryRoute(
+      new Request("http://localhost/api/expense/entries", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personName: "Juliet",
+          category: "food",
+          amount: "abc",
+          item: "groceries",
+          notes: "weekly market run",
+        }),
+      }),
+    );
+    const body = (await response.json()) as { message: string };
+
+    expect(response.status).toBe(400);
+    expect(body.message).toBe("Amount must be numeric");
   });
 
   test("lists stored expense records through the web route", async () => {
