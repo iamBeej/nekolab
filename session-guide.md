@@ -4,11 +4,16 @@ This file is for AI coding agents working in the NekoLab repository.
 
 ## Purpose
 
-NekoLab is a system-foundation project.
+NekoLab currently spans two active areas:
 
-Core loop:
+- workflow foundation and execution infrastructure
+- deterministic expense tracking
+
+Core loops:
 
 `UI -> API -> workflow service -> Prisma/SQLite -> API -> UI`
+
+`UI -> API -> expense service -> Prisma/SQLite -> API -> UI`
 
 The codebase should stay minimal, explicit, and easy to extend.
 
@@ -53,6 +58,19 @@ Use logs for observable state changes such as:
 - failed
 
 Do not treat logs as the primary source of workflow state. The run record is the source of truth.
+
+### Expense tracking
+
+The expense tracker is now an active product surface inside the repo.
+
+Current model:
+
+- deterministic structured expense entry
+- persistent expense records
+- browser-based entry and browsing
+- CLI compatibility for expense commands
+
+Do not assume the repo is workflow-only anymore.
 
 ## Architecture Rules
 
@@ -119,11 +137,19 @@ Use these as the default locations:
 
 Before starting substantial new work, read the most recent project logs in `logs/`.
 
+Also read any relevant active planning documents in `plans/`.
+
 Use those logs to check:
 
 - what the previous session said should happen next
 - whether the current task is still aligned with that plan
 - whether the work has started to drift from the intended priority order
+
+Use planning documents to check:
+
+- whether the documented product scope still matches the repo state
+- whether a handoff document has become stale and should be converted into a living reference
+- whether accomplished work and probable next steps are still accurate
 
 If the work is diverging from the logged plan, call that out explicitly before continuing.
 
@@ -149,7 +175,28 @@ npx prisma migrate dev --name <migration-name>
 - `.env.example` should reflect required variables
 - `README.md` should stay accurate
 - project handoff logs belong in `logs/`
+- active planning and product-reference documents belong in `plans/`
 - Do not commit generated local state that should remain ignored
+
+## Plans
+
+Use `plans/` for active planning documents and evolving product references.
+
+Plan rules:
+
+- keep plan files aligned with the actual repository state
+- if a code or product change is relevant to an existing plan document, update that plan in the same workstream
+- if a one-time handoff becomes the long-term reference, rename or rewrite it accordingly
+- record both what has been accomplished and what should probably happen next
+- do not leave stale scope statements in place after the user has intentionally changed direction
+
+Examples of good plan content:
+
+- current product shape
+- active constraints
+- accomplished work
+- probable next steps
+- still-out-of-scope areas
 
 ## Project Logs
 
@@ -342,13 +389,17 @@ When making changes, prefer this order:
 
 ## When Extending The System
 
-Good next-step areas:
+Good next-step areas depend on the active logs and planning documents.
+
+Common examples:
 
 - workflow definitions
 - richer run history
 - retry/failure handling
+- expense tracker hardening
+- expense page interaction tests
 - background workers
 - auth
 - Neko AI integration
 
-Do not skip the system foundation to jump straight to AI features.
+Do not skip correctness and active documented priorities to jump straight to AI features.
