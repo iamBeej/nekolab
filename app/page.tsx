@@ -4,6 +4,7 @@ import {
   startTransition,
   useEffect,
   useEffectEvent,
+  useRef,
   useState,
 } from "react";
 
@@ -88,6 +89,20 @@ type ExpenseRecord = {
   timestamp: string;
 };
 
+type ExpenseTableSortField =
+  | "id"
+  | "personName"
+  | "category"
+  | "amountInCents"
+  | "timestamp";
+
+type ExpenseTableSortDirection = "asc" | "desc";
+type ExpenseFilterMenu = "personName" | "category" | null;
+type ExpenseFilterMenuPosition = {
+  top: number;
+  left: number;
+};
+
 const EMPTY_EXPENSE_FORM: ExpenseFormState = {
   personName: "",
   category: "",
@@ -152,6 +167,59 @@ function formatExpenseTimestamp(value: string) {
   });
 }
 
+function SortDirectionIndicator({
+  isActive,
+  direction,
+}: {
+  isActive: boolean;
+  direction: ExpenseTableSortDirection;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 12 12"
+      className={`h-2.5 w-2.5 ${
+        isActive ? "text-white/75" : "text-white/30"
+      }`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {direction === "asc" ? (
+        <>
+          <path d="M6 10V3" />
+          <path d="m3.5 5.5 2.5-2.5 2.5 2.5" />
+        </>
+      ) : (
+        <>
+          <path d="M6 2v7" />
+          <path d="m3.5 6.5 2.5 2.5 2.5-2.5" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function FilterIndicator() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 12 12"
+      className="h-2.5 w-2.5 text-white/30"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 3h8" />
+      <path d="M3.5 3h5L6.75 5.1v2.2L5.25 8V5.1z" />
+    </svg>
+  );
+}
+
 function runSummaryFromRun(run: WorkflowRun): WorkflowRunSummary {
   return {
     id: run.id,
@@ -184,7 +252,25 @@ export default function Home() {
       message: "",
     });
   const [expenseRecords, setExpenseRecords] = useState<ExpenseRecord[]>([]);
+  const [expensePersonFilter, setExpensePersonFilter] = useState<string[]>([]);
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState<string[]>(
+    [],
+  );
+  const [activeExpenseFilterMenu, setActiveExpenseFilterMenu] =
+    useState<ExpenseFilterMenu>(null);
+  const [activeExpenseFilterMenuPosition, setActiveExpenseFilterMenuPosition] =
+    useState<ExpenseFilterMenuPosition | null>(null);
+  const [expensePersonFilterQuery, setExpensePersonFilterQuery] = useState("");
+  const [expenseCategoryFilterQuery, setExpenseCategoryFilterQuery] =
+    useState("");
+  const [expenseSortField, setExpenseSortField] =
+    useState<ExpenseTableSortField>("timestamp");
+  const [expenseSortDirection, setExpenseSortDirection] =
+    useState<ExpenseTableSortDirection>("desc");
   const [isExpenseSubmitting, setIsExpenseSubmitting] = useState(false);
+  const activeExpenseFilterMenuRef = useRef<HTMLDivElement | null>(null);
+  const expensePersonFilterButtonRef = useRef<HTMLButtonElement | null>(null);
+  const expenseCategoryFilterButtonRef = useRef<HTMLButtonElement | null>(null);
 
   function commitWorkflowDefinitions(nextWorkflowDefinitions: WorkflowDefinition[]) {
     setWorkflowDefinitions(nextWorkflowDefinitions);
@@ -334,6 +420,76 @@ export default function Home() {
     };
   }, [latestRunId, latestRunStatus]);
 
+  const dismissExpenseFilterMenuOnOutsideInteraction = useEffectEvent(
+    (event: PointerEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (event.key === "Escape") {
+          setActiveExpenseFilterMenu(null);
+          setActiveExpenseFilterMenuPosition(null);
+        }
+
+        return;
+      }
+
+      const eventTarget = event.target;
+      const eventPath =
+        typeof event.composedPath === "function" ? event.composedPath() : [];
+
+      if (
+        activeExpenseFilterMenuRef.current &&
+        !eventPath.includes(activeExpenseFilterMenuRef.current) &&
+        eventTarget instanceof Node &&
+        !activeExpenseFilterMenuRef.current.contains(eventTarget)
+      ) {
+        setActiveExpenseFilterMenu(null);
+        setActiveExpenseFilterMenuPosition(null);
+      }
+    },
+  );
+
+  useEffect(() => {
+    if (!activeExpenseFilterMenu) {
+      return;
+    }
+
+    document.addEventListener(
+      "pointerdown",
+      dismissExpenseFilterMenuOnOutsideInteraction,
+    );
+    document.addEventListener(
+      "keydown",
+      dismissExpenseFilterMenuOnOutsideInteraction,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "pointerdown",
+        dismissExpenseFilterMenuOnOutsideInteraction,
+      );
+      document.removeEventListener(
+        "keydown",
+        dismissExpenseFilterMenuOnOutsideInteraction,
+      );
+      };
+  }, [activeExpenseFilterMenu]);
+
+  useEffect(() => {
+    if (!activeExpenseFilterMenu) {
+      return;
+    }
+
+    const dismissOnViewportChange = () => {
+      setActiveExpenseFilterMenu(null);
+      setActiveExpenseFilterMenuPosition(null);
+    };
+
+    window.addEventListener("resize", dismissOnViewportChange);
+
+    return () => {
+      window.removeEventListener("resize", dismissOnViewportChange);
+    };
+  }, [activeExpenseFilterMenu]);
+
   async function handleRunWorkflow() {
     setIsSubmitting(true);
 
@@ -444,12 +600,256 @@ export default function Home() {
     workflowDefinitions.find(
       (workflowDefinition) => workflowDefinition.id === selectedWorkflowId,
     ) ?? workflowDefinitions[0] ?? null;
+  const expensePersonOptions = Array.from(
+    new Set(expenseRecords.map((expenseRecord) => expenseRecord.personName)),
+  ).sort((leftValue, rightValue) => leftValue.localeCompare(rightValue));
+  const expenseCategoryOptions = Array.from(
+    new Set(expenseRecords.map((expenseRecord) => expenseRecord.category)),
+  ).sort((leftValue, rightValue) => leftValue.localeCompare(rightValue));
+  const visibleExpensePersonOptions = expensePersonOptions.filter((personName) =>
+    personName.toLowerCase().includes(expensePersonFilterQuery.toLowerCase()),
+  );
+  const visibleExpenseCategoryOptions = expenseCategoryOptions.filter(
+    (categoryName) =>
+      categoryName
+        .toLowerCase()
+        .includes(expenseCategoryFilterQuery.toLowerCase()),
+  );
+  const filteredExpenseRecords = expenseRecords
+    .filter((expenseRecord) => {
+      if (
+        expensePersonFilter.length > 0 &&
+        !expensePersonFilter.includes(expenseRecord.personName)
+      ) {
+        return false;
+      }
+
+      if (
+        expenseCategoryFilter.length > 0 &&
+        !expenseCategoryFilter.includes(expenseRecord.category)
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((leftRecord, rightRecord) => {
+      let comparison = 0;
+
+      if (expenseSortField === "id") {
+        comparison = leftRecord.id - rightRecord.id;
+      } else if (expenseSortField === "amountInCents") {
+        comparison = leftRecord.amountInCents - rightRecord.amountInCents;
+      } else if (expenseSortField === "timestamp") {
+        comparison =
+          new Date(leftRecord.timestamp).getTime() -
+          new Date(rightRecord.timestamp).getTime();
+      } else if (expenseSortField === "personName") {
+        comparison = leftRecord.personName.localeCompare(rightRecord.personName);
+      } else if (expenseSortField === "category") {
+        comparison = leftRecord.category.localeCompare(rightRecord.category);
+      }
+
+      return expenseSortDirection === "asc" ? comparison : comparison * -1;
+    });
+  const filteredExpenseTotalInCents = filteredExpenseRecords.reduce(
+    (runningTotal, expenseRecord) =>
+      runningTotal + expenseRecord.amountInCents,
+    0,
+  );
+  const filteredExpensePersonCount = new Set(
+    filteredExpenseRecords.map((expenseRecord) => expenseRecord.personName),
+  ).size;
+  const filteredExpenseCategoryCount = new Set(
+    filteredExpenseRecords.map((expenseRecord) => expenseRecord.category),
+  ).size;
+
+  function handleExpenseSort(nextSortField: ExpenseTableSortField) {
+    if (expenseSortField === nextSortField) {
+      setExpenseSortDirection((currentDirection) =>
+        currentDirection === "asc" ? "desc" : "asc",
+      );
+      return;
+    }
+
+    setExpenseSortField(nextSortField);
+    setExpenseSortDirection(
+      nextSortField === "personName" || nextSortField === "category"
+        ? "asc"
+        : "desc",
+    );
+  }
+
+  function toggleExpenseFilterValue(
+    selectedValues: string[],
+    nextValue: string,
+  ) {
+    if (selectedValues.includes(nextValue)) {
+      return selectedValues.filter((selectedValue) => selectedValue !== nextValue);
+    }
+
+    return [...selectedValues, nextValue];
+  }
+
+  function openExpenseFilterMenu(filterMenu: Exclude<ExpenseFilterMenu, null>) {
+    const triggerElement =
+      filterMenu === "personName"
+        ? expensePersonFilterButtonRef.current
+        : expenseCategoryFilterButtonRef.current;
+
+    if (!triggerElement) {
+      setActiveExpenseFilterMenu(filterMenu);
+      setActiveExpenseFilterMenuPosition(null);
+      return;
+    }
+
+    const triggerRect = triggerElement.getBoundingClientRect();
+
+    setActiveExpenseFilterMenu(filterMenu);
+    setActiveExpenseFilterMenuPosition({
+      top: triggerRect.bottom + 8,
+      left: triggerRect.left - 12,
+    });
+  }
+
+  function renderExpenseFilterMenu(filterMenu: Exclude<ExpenseFilterMenu, null>) {
+    const isPersonFilter = filterMenu === "personName";
+    const title = isPersonFilter ? "Filter Person" : "Filter Category";
+    const query = isPersonFilter
+      ? expensePersonFilterQuery
+      : expenseCategoryFilterQuery;
+    const options = isPersonFilter
+      ? visibleExpensePersonOptions
+      : visibleExpenseCategoryOptions;
+    const selectedValues = isPersonFilter
+      ? expensePersonFilter
+      : expenseCategoryFilter;
+    const selectedLabel =
+      selectedValues.length > 0
+        ? `${selectedValues.length} selected`
+        : "All selected";
+
+    return (
+      <div
+        ref={activeExpenseFilterMenuRef}
+        className="fixed z-30 w-56 rounded-lg border border-white/10 bg-zinc-950 p-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
+        style={{
+          top: activeExpenseFilterMenuPosition?.top ?? 0,
+          left: activeExpenseFilterMenuPosition?.left ?? 0,
+        }}
+      >
+        <p className="text-[9px] uppercase tracking-[0.18em] text-white/35">
+          {title}
+        </p>
+          <p className="mt-1 text-[9px] uppercase tracking-[0.16em] text-white/25">
+            {selectedLabel}
+          </p>
+          <input
+            value={query}
+            onChange={(event) => {
+              if (isPersonFilter) {
+                setExpensePersonFilterQuery(event.target.value);
+              return;
+            }
+
+            setExpenseCategoryFilterQuery(event.target.value);
+          }}
+          placeholder={isPersonFilter ? "Search person..." : "Search category..."}
+          className="mt-2.5 w-full rounded-lg border border-white/10 bg-black px-2.5 py-2 text-[11px] text-white outline-none transition focus:border-white/30"
+        />
+        <div
+          onWheel={(event) => {
+            event.stopPropagation();
+          }}
+          className="mt-2.5 max-h-48 overflow-y-auto overscroll-contain rounded-lg border border-white/10"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (isPersonFilter) {
+                setExpensePersonFilter([]);
+                setExpensePersonFilterQuery("");
+              } else {
+                setExpenseCategoryFilter([]);
+                setExpenseCategoryFilterQuery("");
+              }
+            }}
+            className={`flex w-full items-center justify-between px-2.5 py-2 text-left text-[11px] transition hover:bg-white/5 ${
+              selectedValues.length === 0
+                ? "bg-white/[0.06] text-white"
+                : "text-white/75"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className={`flex h-3 w-3 items-center justify-center rounded-sm border ${
+                  selectedValues.length === 0
+                    ? "border-white/50 bg-white/[0.08]"
+                    : "border-white/20"
+                }`}
+              >
+                {selectedValues.length === 0 ? (
+                  <span className="h-1.5 w-1.5 rounded-[1px] bg-white/70" />
+                ) : null}
+              </span>
+              <span>All</span>
+            </span>
+          </button>
+          {options.length > 0 ? (
+            options.map((optionValue) => (
+              <button
+                key={optionValue}
+                type="button"
+                onClick={() => {
+                  if (isPersonFilter) {
+                    setExpensePersonFilter((currentValues) =>
+                      toggleExpenseFilterValue(currentValues, optionValue),
+                    );
+                  } else {
+                    setExpenseCategoryFilter((currentValues) =>
+                      toggleExpenseFilterValue(currentValues, optionValue),
+                    );
+                  }
+                }}
+                className={`flex w-full items-center justify-between border-t border-white/10 px-2.5 py-2 text-left text-[11px] transition hover:bg-white/5 ${
+                  selectedValues.includes(optionValue)
+                    ? "bg-white/[0.06] text-white"
+                    : "text-white/75"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-3 w-3 items-center justify-center rounded-sm border ${
+                      selectedValues.includes(optionValue)
+                        ? "border-white/50 bg-white/[0.08]"
+                        : "border-white/20"
+                    }`}
+                  >
+                    {selectedValues.includes(optionValue) ? (
+                      <span className="h-1.5 w-1.5 rounded-[1px] bg-white/70" />
+                    ) : null}
+                  </span>
+                  <span>{formatTitleCase(optionValue)}</span>
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="border-t border-white/10 px-2.5 py-2 text-[11px] text-white/40">
+              No matching options.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   function renderExpenseSection() {
     return (
       <>
         <div className="mt-4 rounded-lg border border-white/10 bg-black/60 p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-4">
             <label className="space-y-2">
               <span className="text-xs uppercase tracking-[0.18em] text-white/45">
                 Person
@@ -577,21 +977,185 @@ export default function Home() {
           </h3>
           {expenseRecords.length > 0 ? (
             <div className="overflow-hidden rounded-lg border border-white/10">
-              <div className="max-h-[31rem] overflow-auto">
-                <table className="min-w-full border-collapse text-left text-sm text-white/80">
-                  <thead className="sticky top-0 z-10 bg-zinc-950 text-xs uppercase tracking-[0.18em] text-white/45">
+              <table className="min-w-full border-collapse text-left text-xs text-white/80">
+                <thead className="bg-zinc-950 text-[10px] uppercase tracking-[0.18em] text-white/45">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Visible Records</th>
+                    <th className="px-4 py-3 font-medium">Filtered Total</th>
+                    <th className="px-4 py-3 font-medium">Persons</th>
+                    <th className="px-4 py-3 font-medium">Categories</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-white/10 align-top">
+                    <td className="px-4 py-3 font-mono text-xs text-white/85">
+                      {filteredExpenseRecords.length}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-white/85">
+                      {formatPesoForTable(filteredExpenseTotalInCents)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-white/85">
+                      {filteredExpensePersonCount}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-white/85">
+                      {filteredExpenseCategoryCount}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {expenseRecords.length > 0 && filteredExpenseRecords.length > 0 ? (
+            <div className="relative overflow-visible rounded-lg border border-white/10">
+              <div className="max-h-[31rem] overflow-auto overscroll-contain rounded-lg">
+                <table className="min-w-full border-collapse text-left text-xs text-white/80">
+                  <thead className="sticky top-0 z-10 bg-zinc-950 text-[10px] uppercase tracking-[0.18em] text-white/45">
                     <tr>
-                      <th className="px-4 py-3 font-medium">ID</th>
-                      <th className="px-4 py-3 font-medium">Person</th>
-                      <th className="px-4 py-3 font-medium">Category</th>
-                      <th className="px-4 py-3 font-medium">Amount</th>
+                      <th className="px-4 py-3 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleExpenseSort("id");
+                          }}
+                          className="flex items-center gap-1.5 transition hover:text-white"
+                        >
+                          <span>ID</span>
+                          <SortDirectionIndicator
+                            isActive={expenseSortField === "id"}
+                            direction={
+                              expenseSortField === "id"
+                                ? expenseSortDirection
+                                : "desc"
+                            }
+                          />
+                        </button>
+                      </th>
+                      <th className="relative px-4 py-3 font-medium">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleExpenseSort("personName");
+                            }}
+                            className="flex items-center gap-1.5 transition hover:text-white"
+                          >
+                            <span>Person</span>
+                            <SortDirectionIndicator
+                              isActive={expenseSortField === "personName"}
+                              direction={
+                                expenseSortField === "personName"
+                                  ? expenseSortDirection
+                                  : "asc"
+                              }
+                            />
+                          </button>
+                          <button
+                            ref={expensePersonFilterButtonRef}
+                            type="button"
+                            onClick={() => {
+                              if (activeExpenseFilterMenu === "personName") {
+                                setActiveExpenseFilterMenu(null);
+                                setActiveExpenseFilterMenuPosition(null);
+                                return;
+                              }
+
+                              openExpenseFilterMenu("personName");
+                            }}
+                            className={`transition hover:text-white ${
+                              expensePersonFilter.length > 0
+                                ? "text-white/75"
+                                : "text-white/35"
+                            }`}
+                          >
+                            <FilterIndicator />
+                          </button>
+                        </div>
+                      </th>
+                      <th className="relative px-4 py-3 font-medium">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleExpenseSort("category");
+                            }}
+                            className="flex items-center gap-1.5 transition hover:text-white"
+                          >
+                            <span>Category</span>
+                            <SortDirectionIndicator
+                              isActive={expenseSortField === "category"}
+                              direction={
+                                expenseSortField === "category"
+                                  ? expenseSortDirection
+                                  : "asc"
+                              }
+                            />
+                          </button>
+                          <button
+                            ref={expenseCategoryFilterButtonRef}
+                            type="button"
+                            onClick={() => {
+                              if (activeExpenseFilterMenu === "category") {
+                                setActiveExpenseFilterMenu(null);
+                                setActiveExpenseFilterMenuPosition(null);
+                                return;
+                              }
+
+                              openExpenseFilterMenu("category");
+                            }}
+                            className={`transition hover:text-white ${
+                              expenseCategoryFilter.length > 0
+                                ? "text-white/75"
+                                : "text-white/35"
+                            }`}
+                          >
+                            <FilterIndicator />
+                          </button>
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleExpenseSort("amountInCents");
+                          }}
+                          className="flex items-center gap-1.5 transition hover:text-white"
+                        >
+                          <span>Amount</span>
+                          <SortDirectionIndicator
+                            isActive={expenseSortField === "amountInCents"}
+                            direction={
+                              expenseSortField === "amountInCents"
+                                ? expenseSortDirection
+                                : "desc"
+                            }
+                          />
+                        </button>
+                      </th>
                       <th className="px-4 py-3 font-medium">Item</th>
                       <th className="px-4 py-3 font-medium">Notes</th>
-                      <th className="px-4 py-3 font-medium">Timestamp</th>
+                      <th className="px-4 py-3 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleExpenseSort("timestamp");
+                          }}
+                          className="flex items-center gap-1.5 transition hover:text-white"
+                        >
+                          <span>Timestamp</span>
+                          <SortDirectionIndicator
+                            isActive={expenseSortField === "timestamp"}
+                            direction={
+                              expenseSortField === "timestamp"
+                                ? expenseSortDirection
+                                : "desc"
+                            }
+                          />
+                        </button>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {expenseRecords.map((expenseRecord) => (
+                    {filteredExpenseRecords.map((expenseRecord) => (
                       <tr
                         key={expenseRecord.id}
                         className="border-t border-white/10 align-top"
@@ -623,11 +1187,16 @@ export default function Home() {
                 </table>
               </div>
             </div>
+            ) : expenseRecords.length > 0 ? (
+              <div className="rounded-lg border border-dashed border-white/10 px-4 py-3 text-sm text-white/50">
+                No records match the selected person and category filters.
+              </div>
           ) : (
             <div className="rounded-lg border border-dashed border-white/10 px-4 py-3 text-sm text-white/50">
               No stored expense records yet.
             </div>
           )}
+          {activeExpenseFilterMenu ? renderExpenseFilterMenu(activeExpenseFilterMenu) : null}
         </div>
       </>
     );
@@ -812,7 +1381,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-black px-6 py-8 text-white sm:px-8 sm:py-10">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-4xl flex-col gap-10">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-7xl flex-col gap-10">
         <header className="space-y-3">
           <p className="text-sm uppercase tracking-[0.24em] text-white/50">
             Dashboard
