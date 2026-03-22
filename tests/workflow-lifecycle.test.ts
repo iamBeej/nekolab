@@ -208,7 +208,7 @@ describe.sequential("workflow lifecycle", () => {
     expect(body.map((workflowDefinition) => workflowDefinition.id)).toEqual([
       "default-workflow",
       "system-health-check",
-      "neko-preflight",
+      "winter-preflight",
     ]);
     expect(body[1]?.name).toBe("System health check");
   });

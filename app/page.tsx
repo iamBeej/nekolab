@@ -21,8 +21,8 @@ const sections = [
     description: "Inspect execution results and system activity",
   },
   {
-    id: "neko",
-    title: "Neko",
+    id: "winter",
+    title: "Winter",
     description: "AI assistant for workflow generation",
   },
 ];
@@ -445,10 +445,10 @@ export default function Home() {
     );
   }
 
-  function renderNekoSection() {
+  function renderWinterSection() {
     return (
       <div className="mt-4 rounded-lg border border-dashed border-white/10 px-4 py-3 text-sm text-white/50">
-        Neko is not wired in yet. The workflow and logging system is now the stable base to build it on.
+        Winter is not wired in yet. The workflow and logging system is now the stable base to build it on.
       </div>
     );
   }
@@ -462,7 +462,7 @@ export default function Home() {
       return renderLogsSection();
     }
 
-    return renderNekoSection();
+    return renderWinterSection();
   }
 
   return (

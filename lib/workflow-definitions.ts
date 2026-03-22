@@ -19,10 +19,10 @@ export const workflowDefinitions: WorkflowDefinition[] = [
     completionMessage: "System health check passed",
   },
   {
-    id: "neko-preflight",
-    name: "Neko preflight",
-    description: "Prepares the Neko integration surface without calling external services.",
-    completionMessage: "Neko preflight completed",
+    id: "winter-preflight",
+    name: "Winter preflight",
+    description: "Prepares the Winter integration surface without calling external services.",
+    completionMessage: "Winter preflight completed",
   },
 ];
 
