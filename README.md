@@ -62,6 +62,7 @@ Open [http://localhost:3000](http://localhost:3000).
 npm run dev
 npm run build
 npm run lint
+npm run test
 npx tsc --noEmit
 npx prisma migrate dev
 npx prisma studio
