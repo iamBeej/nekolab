@@ -31,8 +31,10 @@ const schemaSql = `
   CREATE TABLE IF NOT EXISTS "Expense" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "personId" INTEGER NOT NULL,
+    "category" TEXT NOT NULL,
     "amountInCents" INTEGER NOT NULL,
     "item" TEXT NOT NULL,
+    "notes" TEXT NOT NULL,
     "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Expense_personId_fkey"
       FOREIGN KEY ("personId") REFERENCES "Person" ("id")
@@ -81,7 +83,7 @@ describe.sequential("expense tracker commands", () => {
 
   test("adds an expense and returns the person's updated total", async () => {
     const output = await executeExpenseCommand(
-      "expense add | person:Juliet | amount:500 | item:groceries",
+      "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run",
     );
 
     expect(output).toBe("[OK] Expense added\nJuliet total: \u20b1500");
@@ -89,10 +91,10 @@ describe.sequential("expense tracker commands", () => {
 
   test("returns a person's total across multiple expenses", async () => {
     await executeExpenseCommand(
-      "expense add | person:Juliet | amount:500 | item:groceries",
+      "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run",
     );
     await executeExpenseCommand(
-      "expense add | person:Juliet | amount:150.50 | item:coffee beans",
+      "expense add | person:Juliet | category:food | amount:150.50 | item:coffee beans | notes:for breakfast prep",
     );
 
     const output = await executeExpenseCommand("expense total | person:Juliet");
@@ -102,10 +104,10 @@ describe.sequential("expense tracker commands", () => {
 
   test("returns the overall total across people", async () => {
     await executeExpenseCommand(
-      "expense add | person:Juliet | amount:500 | item:groceries",
+      "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run",
     );
     await executeExpenseCommand(
-      "expense add | person:Romeo | amount:299.99 | item:snacks",
+      "expense add | person:Romeo | category:food | amount:299.99 | item:snacks | notes:movie night",
     );
 
     const output = await executeExpenseCommand("expense total");
@@ -115,22 +117,38 @@ describe.sequential("expense tracker commands", () => {
 
   test("rejects missing required fields", async () => {
     await expect(
-      executeExpenseCommand("expense add | person:Juliet | amount:500"),
+      executeExpenseCommand("expense add | person:Juliet | category:food | amount:500"),
     ).rejects.toThrow("Missing required field 'item'");
+  });
+
+  test("rejects missing categories", async () => {
+    await expect(
+      executeExpenseCommand(
+        "expense add | person:Juliet | amount:500 | item:groceries",
+      ),
+    ).rejects.toThrow("Missing required field 'category'");
   });
 
   test("rejects non-numeric amounts", async () => {
     await expect(
       executeExpenseCommand(
-        "expense add | person:Juliet | amount:abc | item:groceries",
+        "expense add | person:Juliet | category:food | amount:abc | item:groceries | notes:weekly market run",
       ),
     ).rejects.toThrow("Amount must be numeric");
+  });
+
+  test("rejects missing notes", async () => {
+    await expect(
+      executeExpenseCommand(
+        "expense add | person:Juliet | category:food | amount:500 | item:groceries",
+      ),
+    ).rejects.toThrow("Missing required field 'notes'");
   });
 
   test("runs through the CLI entry point", async () => {
     const { stdout } = await execFileAsync(process.execPath, [
       "scripts/expense-cli.mjs",
-      "expense add | person:Juliet | amount:500 | item:groceries",
+      "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run",
     ], {
       cwd: process.cwd(),
       env: {

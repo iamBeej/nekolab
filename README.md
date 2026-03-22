@@ -42,19 +42,13 @@ copy .env.example .env
 npx prisma migrate dev
 ```
 
-4. Run Prisma migrations:
+4. Run an expense command:
 
 ```bash
-npx prisma migrate dev
+npm run expense -- "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run"
 ```
 
-5. Run an expense command:
-
-```bash
-npm run expense -- "expense add | person:Juliet | amount:500 | item:groceries"
-```
-
-6. Optional: start the existing dev server:
+5. Optional: start the existing dev server:
 
 ```bash
 npm run dev
@@ -85,13 +79,13 @@ npx prisma studio
 ## System Model
 
 - `Person` stores a unique person name.
-- `Expense` stores an append-only expense record with amount, item, and timestamp.
+- `Expense` stores an append-only expense record with category, amount, item, notes, and timestamp.
 - `WorkflowRun` and `Log` remain in the repository as part of the existing foundation work.
 
 ## Supported Commands
 
 ```bash
-npm run expense -- "expense add | person:Juliet | amount:500 | item:groceries"
+npm run expense -- "expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run"
 npm run expense -- "expense total | person:Juliet"
 npm run expense -- "expense total"
 ```

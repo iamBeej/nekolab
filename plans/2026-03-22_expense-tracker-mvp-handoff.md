@@ -39,10 +39,10 @@ This is **NOT a full app**, UI, or AI system.
 #### Add Expense
 
 Format:
-`expense add | person:<name> | amount:<number> | item:<text>`
+`expense add | person:<name> | category:<text> | amount:<number> | item:<text> | notes:<text>`
 
 Example:
-`expense add | person:Juliet | amount:500 | item:groceries`
+`expense add | person:Juliet | category:food | amount:500 | item:groceries | notes:weekly market run`
 
 ---
 
@@ -63,8 +63,10 @@ Example:
 ### Expense
 
 - person: string (required)
+- category: string (required)
 - amount: number (required)
 - item: string (required)
+- notes: string (required)
 - timestamp: datetime (auto-generated)
 
 ---

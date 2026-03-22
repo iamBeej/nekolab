@@ -58,8 +58,10 @@ model Person {
 model Expense {
   id            Int      @id @default(autoincrement())
   personId      Int
+  category      String
   amountInCents Int
   item          String
+  notes         String
   timestamp     DateTime @default(now())
   person        Person   @relation(fields: [personId], references: [id], onDelete: Restrict)
 

@@ -19,6 +19,23 @@ const migrationFilePaths = [
     "migration.sql",
   ),
 ];
+const expenseMigrationFilePaths = [
+  path.join(
+    migrationDirectory,
+    "20260322022153_expense_tracker_mvp",
+    "migration.sql",
+  ),
+  path.join(
+    migrationDirectory,
+    "20260322023002_expense_categories",
+    "migration.sql",
+  ),
+  path.join(
+    migrationDirectory,
+    "20260322023200_expense_notes",
+    "migration.sql",
+  ),
+];
 
 function removeMigrationTestDatabase() {
   for (const suffix of ["", "-shm", "-wal"]) {
@@ -89,6 +106,49 @@ describe.sequential("prisma migration history", () => {
         ["info", "Legacy workflow queued"],
         ["error", "Legacy workflow failed"],
       ]);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test("upgrades legacy expense rows into category and notes fields", async () => {
+    const prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url: `file:${migrationDatabasePath}`,
+        },
+      },
+    });
+
+    await prisma.$connect();
+
+    try {
+      await executeSqlFile(prisma, expenseMigrationFilePaths[0]);
+
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO "Person" ("name")
+        VALUES ('Juliet');
+      `);
+
+      await prisma.$executeRawUnsafe(`
+        INSERT INTO "Expense" ("personId", "amountInCents", "item", "timestamp")
+        VALUES (1, 50000, 'groceries', '2026-03-22T02:00:00.000Z');
+      `);
+
+      await executeSqlFile(prisma, expenseMigrationFilePaths[1]);
+      await executeSqlFile(prisma, expenseMigrationFilePaths[2]);
+
+      const expenses = await prisma.expense.findMany({
+        orderBy: {
+          id: "asc",
+        },
+      });
+
+      expect(expenses).toHaveLength(1);
+      expect(expenses[0]?.category).toBe("uncategorized");
+      expect(expenses[0]?.notes).toBe("");
+      expect(expenses[0]?.amountInCents).toBe(50000);
+      expect(expenses[0]?.item).toBe("groceries");
     } finally {
       await prisma.$disconnect();
     }
