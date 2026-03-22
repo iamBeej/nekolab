@@ -52,6 +52,12 @@ type WorkflowRun = WorkflowRunSummary & {
   logs: WorkflowLog[];
 };
 
+type WorkflowDefinition = {
+  id: string;
+  name: string;
+  description: string;
+};
+
 function formatTimestamp(value: string | null) {
   if (!value) {
     return "N/A";
@@ -73,11 +79,33 @@ function runSummaryFromRun(run: WorkflowRun): WorkflowRunSummary {
 }
 
 export default function Home() {
+  const [workflowDefinitions, setWorkflowDefinitions] = useState<
+    WorkflowDefinition[]
+  >([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(
+    null,
+  );
   const [runHistory, setRunHistory] = useState<WorkflowRunSummary[]>([]);
   const [latestRun, setLatestRun] = useState<WorkflowRun | null>(null);
   const [selectedRun, setSelectedRun] = useState<WorkflowRun | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function commitWorkflowDefinitions(nextWorkflowDefinitions: WorkflowDefinition[]) {
+    setWorkflowDefinitions(nextWorkflowDefinitions);
+    setSelectedWorkflowId((currentWorkflowId) => {
+      if (
+        currentWorkflowId &&
+        nextWorkflowDefinitions.some(
+          (workflowDefinition) => workflowDefinition.id === currentWorkflowId,
+        )
+      ) {
+        return currentWorkflowId;
+      }
+
+      return nextWorkflowDefinitions[0]?.id ?? null;
+    });
+  }
 
   function commitDashboardState(
     nextLatestRun: WorkflowRun | null,
@@ -155,8 +183,13 @@ export default function Home() {
 
   const loadInitialDashboard = useEffectEvent(async () => {
     try {
-      const dashboard = await loadDashboardData(null);
+      const [workflowDefinitionsResult, dashboard] = await Promise.all([
+        fetchJson<WorkflowDefinition[]>("/api/workflow/definitions"),
+        loadDashboardData(null),
+      ]);
+
       startTransition(() => {
+        commitWorkflowDefinitions(workflowDefinitionsResult);
         commitDashboardState(
           dashboard.latestRun,
           dashboard.runHistory,
@@ -198,16 +231,34 @@ export default function Home() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/workflow/run", {
-        method: "POST",
-      });
-      const result = (await response.json()) as WorkflowRun;
+      const workflowId = selectedWorkflowId ?? workflowDefinitions[0]?.id ?? null;
 
-      if (!response.ok) {
-        throw new Error("Failed to queue workflow");
+      if (!workflowId) {
+        throw new Error("No workflow definitions available");
       }
 
-      console.log(result);
+      const response = await fetch("/api/workflow/run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workflowId,
+        }),
+      });
+      const responseBody = (await response.json()) as
+        | WorkflowRun
+        | { message: string };
+
+      if (!response.ok || "message" in responseBody) {
+        throw new Error(
+          "message" in responseBody
+            ? responseBody.message
+            : "Failed to queue workflow",
+        );
+      }
+
+      const result = responseBody;
       commitDashboardState(
         result,
         [runSummaryFromRun(result), ...runHistory.filter((run) => run.id !== result.id)].slice(
@@ -236,10 +287,46 @@ export default function Home() {
 
   const displayedRun = selectedRun ?? latestRun;
   const displayedLogs = displayedRun?.logs ?? [];
+  const selectedWorkflowDefinition =
+    workflowDefinitions.find(
+      (workflowDefinition) => workflowDefinition.id === selectedWorkflowId,
+    ) ?? workflowDefinitions[0] ?? null;
 
   function renderWorkflowSection() {
     return (
       <>
+        <div className="mt-4 rounded-lg border border-white/10 px-4 py-3 text-sm text-white/75">
+          <label
+            htmlFor="workflow-definition"
+            className="text-xs uppercase tracking-[0.18em] text-white/45"
+          >
+            Workflow Definition
+          </label>
+          <select
+            id="workflow-definition"
+            value={selectedWorkflowId ?? ""}
+            onChange={(event) => {
+              setSelectedWorkflowId(event.target.value);
+            }}
+            disabled={isSubmitting || workflowDefinitions.length === 0}
+            className="mt-3 w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-white/30 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {workflowDefinitions.length > 0 ? (
+              workflowDefinitions.map((workflowDefinition) => (
+                <option key={workflowDefinition.id} value={workflowDefinition.id}>
+                  {workflowDefinition.name}
+                </option>
+              ))
+            ) : (
+              <option value="">Loading workflow definitions...</option>
+            )}
+          </select>
+          <p className="mt-3 text-sm text-white/55">
+            {selectedWorkflowDefinition?.description ??
+              "Loading workflow definitions..."}
+          </p>
+        </div>
+
         <div className="mt-4 rounded-lg border border-white/10 px-4 py-3 text-sm text-white/75">
           {latestRun ? (
             <div className="space-y-1">
@@ -270,10 +357,14 @@ export default function Home() {
         <button
           type="button"
           onClick={handleRunWorkflow}
-          disabled={isSubmitting}
+          disabled={isSubmitting || workflowDefinitions.length === 0}
           className="mt-4 rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSubmitting ? "Queueing..." : "Run Workflow"}
+          {isSubmitting
+            ? "Queueing..."
+            : selectedWorkflowDefinition
+              ? `Run ${selectedWorkflowDefinition.name}`
+              : "Run Workflow"}
         </button>
 
         <div className="mt-4 space-y-3">

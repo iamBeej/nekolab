@@ -6,8 +6,14 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import {
+  DEFAULT_WORKFLOW_ID,
+  getWorkflowDefinitionById,
+  getWorkflowDefinitionByName,
+} from "@/lib/workflow-definitions";
 
-const DEFAULT_WORKFLOW_NAME = "Default workflow";
+const DEFAULT_WORKFLOW_NAME =
+  getWorkflowDefinitionById(DEFAULT_WORKFLOW_ID)?.name ?? "Default workflow";
 const WORKFLOW_PROCESSING_DELAY_MS = 750;
 const FAILABLE_WORKFLOW_RUN_STATUSES: WorkflowRunStatus[] = [
   "pending",
@@ -18,6 +24,13 @@ class WorkflowRunStateError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "WorkflowRunStateError";
+  }
+}
+
+export class WorkflowDefinitionNotFoundError extends Error {
+  constructor(workflowId: string) {
+    super(`Workflow definition '${workflowId}' was not found`);
+    this.name = "WorkflowDefinitionNotFoundError";
   }
 }
 
@@ -75,6 +88,18 @@ export async function createWorkflowRun(name = DEFAULT_WORKFLOW_NAME) {
   });
 }
 
+export async function createWorkflowRunForDefinition(
+  workflowId = DEFAULT_WORKFLOW_ID,
+) {
+  const workflowDefinition = getWorkflowDefinitionById(workflowId);
+
+  if (!workflowDefinition) {
+    throw new WorkflowDefinitionNotFoundError(workflowId);
+  }
+
+  return createWorkflowRun(workflowDefinition.name);
+}
+
 export async function getWorkflowRunById(runId: number) {
   return prisma.workflowRun.findUnique({
     where: {
@@ -129,7 +154,31 @@ async function transitionWorkflowRunToRunning(runId: number) {
   });
 }
 
-async function completeWorkflowRun(runId: number) {
+async function getWorkflowRunName(runId: number) {
+  const run = await prisma.workflowRun.findUnique({
+    where: {
+      id: runId,
+    },
+    select: {
+      name: true,
+    },
+  });
+
+  return run?.name ?? null;
+}
+
+function getWorkflowCompletionMessage(workflowRunName: string | null) {
+  if (!workflowRunName) {
+    return "Workflow executed";
+  }
+
+  return (
+    getWorkflowDefinitionByName(workflowRunName)?.completionMessage ??
+    "Workflow executed"
+  );
+}
+
+async function completeWorkflowRun(runId: number, message: string) {
   const finishedAt = new Date();
 
   await prisma.$transaction(async (tx) => {
@@ -150,7 +199,7 @@ async function completeWorkflowRun(runId: number) {
       );
     }
 
-    await appendWorkflowLog(tx, runId, "Workflow executed");
+    await appendWorkflowLog(tx, runId, message);
   });
 }
 
@@ -186,7 +235,11 @@ export async function processWorkflowRun(runId: number) {
 
     await wait(WORKFLOW_PROCESSING_DELAY_MS);
 
-    await completeWorkflowRun(runId);
+    const workflowRunName = await getWorkflowRunName(runId);
+    await completeWorkflowRun(
+      runId,
+      getWorkflowCompletionMessage(workflowRunName),
+    );
   } catch (error) {
     if (error instanceof WorkflowRunStateError) {
       return getWorkflowRunById(runId);

@@ -15,12 +15,17 @@ vi.mock("next/server", () => ({
   after: () => undefined,
 }));
 
+import {
+  GET as listWorkflowDefinitionsRoute,
+} from "@/app/api/workflow/definitions/route";
 import { GET as getLatestRunRoute } from "@/app/api/workflow/run/route";
+import { POST as queueWorkflowRunRoute } from "@/app/api/workflow/run/route";
 import { GET as getRunByIdRoute } from "@/app/api/workflow/runs/[id]/route";
 import { GET as listWorkflowRunsRoute } from "@/app/api/workflow/runs/route";
 import { prisma } from "@/lib/prisma";
 import {
   createWorkflowRun,
+  createWorkflowRunForDefinition,
   processWorkflowRun,
 } from "@/lib/workflows";
 
@@ -114,7 +119,21 @@ describe.sequential("workflow lifecycle", () => {
     expect(processedRun?.logs.map((log) => log.message)).toEqual([
       "Workflow queued",
       "Workflow started",
-      "Workflow executed",
+      "Default workflow executed",
+    ]);
+  });
+
+  test("processes a selected workflow definition with its own completion log", async () => {
+    const run = await createWorkflowRunForDefinition("system-health-check");
+
+    const processedRun = await processWorkflowRun(run.id);
+
+    expect(processedRun?.name).toBe("System health check");
+    expect(processedRun?.status).toBe("success");
+    expect(processedRun?.logs.map((log) => log.message)).toEqual([
+      "Workflow queued",
+      "Workflow started",
+      "System health check passed",
     ]);
   });
 
@@ -176,6 +195,65 @@ describe.sequential("workflow lifecycle", () => {
     expect(body.id).toBe(latestRun.id);
     expect(body.name).toBe("Latest run");
     expect(body.logs.map((log) => log.message)).toEqual(["Workflow queued"]);
+  });
+
+  test("returns the available workflow definitions", async () => {
+    const response = await listWorkflowDefinitionsRoute();
+    const body = (await response.json()) as Array<{
+      id: string;
+      name: string;
+    }>;
+
+    expect(response.status).toBe(200);
+    expect(body.map((workflowDefinition) => workflowDefinition.id)).toEqual([
+      "default-workflow",
+      "system-health-check",
+      "neko-preflight",
+    ]);
+    expect(body[1]?.name).toBe("System health check");
+  });
+
+  test("queues the selected workflow definition from the trigger API", async () => {
+    const response = await queueWorkflowRunRoute(
+      new Request("http://localhost/api/workflow/run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workflowId: "system-health-check",
+        }),
+      }),
+    );
+    const body = (await response.json()) as {
+      id: number;
+      name: string;
+      logs: Array<{ message: string }>;
+    };
+
+    expect(response.status).toBe(202);
+    expect(body.name).toBe("System health check");
+    expect(body.logs.map((log) => log.message)).toEqual(["Workflow queued"]);
+  });
+
+  test("rejects unknown workflow definitions from the trigger API", async () => {
+    const response = await queueWorkflowRunRoute(
+      new Request("http://localhost/api/workflow/run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workflowId: "missing-workflow",
+        }),
+      }),
+    );
+    const body = (await response.json()) as { message: string };
+
+    expect(response.status).toBe(400);
+    expect(body.message).toBe(
+      "Workflow definition 'missing-workflow' was not found",
+    );
   });
 
   test("returns limited workflow history from the runs API", async () => {
