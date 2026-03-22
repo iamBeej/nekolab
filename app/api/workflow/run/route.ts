@@ -10,26 +10,29 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-  const run = await createWorkflowRun();
+  try {
+    const run = await createWorkflowRun();
 
-  if (!run) {
+    after(async () => {
+      await processWorkflowRun(run.id);
+    });
+
+    return Response.json(run, {
+      status: 202,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to create workflow run";
+
     return Response.json(
       {
-        message: "Unable to create workflow run",
+        message,
       },
       {
         status: 500,
       },
     );
   }
-
-  after(async () => {
-    await processWorkflowRun(run.id);
-  });
-
-  return Response.json(run, {
-    status: 202,
-  });
 }
 
 export async function GET() {

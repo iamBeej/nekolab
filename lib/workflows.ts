@@ -1,9 +1,25 @@
-import { Prisma, PrismaClient, WorkflowLogLevel } from "@prisma/client";
+import {
+  Prisma,
+  PrismaClient,
+  WorkflowLogLevel,
+  WorkflowRunStatus,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
 const DEFAULT_WORKFLOW_NAME = "Default workflow";
 const WORKFLOW_PROCESSING_DELAY_MS = 750;
+const FAILABLE_WORKFLOW_RUN_STATUSES: WorkflowRunStatus[] = [
+  "pending",
+  "running",
+];
+
+class WorkflowRunStateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkflowRunStateError";
+  }
+}
 
 export const workflowRunWithLogsInclude =
   Prisma.validator<Prisma.WorkflowRunInclude>()({
@@ -43,16 +59,20 @@ async function appendWorkflowLog(
 }
 
 export async function createWorkflowRun(name = DEFAULT_WORKFLOW_NAME) {
-  const run = await prisma.workflowRun.create({
-    data: {
-      name,
-      status: "pending",
-    },
+  return prisma.$transaction((tx) => {
+    return tx.workflowRun.create({
+      data: {
+        name,
+        status: "pending",
+        logs: {
+          create: {
+            message: "Workflow queued",
+          },
+        },
+      },
+      include: workflowRunWithLogsInclude,
+    });
   });
-
-  await appendWorkflowLog(prisma, run.id, "Workflow queued");
-
-  return getWorkflowRunById(run.id);
 }
 
 export async function getWorkflowRunById(runId: number) {
@@ -82,60 +102,100 @@ export async function listWorkflowRuns(limit = 8) {
   });
 }
 
+async function transitionWorkflowRunToRunning(runId: number) {
+  const startedAt = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const result = await tx.workflowRun.updateMany({
+      where: {
+        id: runId,
+        status: "pending",
+      },
+      data: {
+        status: "running",
+        startedAt,
+        finishedAt: null,
+        error: null,
+      },
+    });
+
+    if (result.count === 0) {
+      throw new WorkflowRunStateError(
+        `Workflow run ${runId} is not pending and cannot be started`,
+      );
+    }
+
+    await appendWorkflowLog(tx, runId, "Workflow started");
+  });
+}
+
+async function completeWorkflowRun(runId: number) {
+  const finishedAt = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const result = await tx.workflowRun.updateMany({
+      where: {
+        id: runId,
+        status: "running",
+      },
+      data: {
+        status: "success",
+        finishedAt,
+      },
+    });
+
+    if (result.count === 0) {
+      throw new WorkflowRunStateError(
+        `Workflow run ${runId} is not running and cannot be completed`,
+      );
+    }
+
+    await appendWorkflowLog(tx, runId, "Workflow executed");
+  });
+}
+
+async function failWorkflowRun(runId: number, message: string) {
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.workflowRun.updateMany({
+      where: {
+        id: runId,
+        status: {
+          in: FAILABLE_WORKFLOW_RUN_STATUSES,
+        },
+      },
+      data: {
+        status: "failed",
+        finishedAt: new Date(),
+        error: message,
+      },
+    });
+
+    if (result.count === 0) {
+      return false;
+    }
+
+    await appendWorkflowLog(tx, runId, message, "error");
+
+    return true;
+  });
+}
+
 export async function processWorkflowRun(runId: number) {
   try {
-    const startedAt = new Date();
-
-    await prisma.$transaction(async (tx) => {
-      await tx.workflowRun.update({
-        where: {
-          id: runId,
-        },
-        data: {
-          status: "running",
-          startedAt,
-          error: null,
-        },
-      });
-
-      await appendWorkflowLog(tx, runId, "Workflow started");
-    });
+    await transitionWorkflowRunToRunning(runId);
 
     await wait(WORKFLOW_PROCESSING_DELAY_MS);
 
-    const finishedAt = new Date();
-
-    await prisma.$transaction(async (tx) => {
-      await appendWorkflowLog(tx, runId, "Workflow executed");
-
-      await tx.workflowRun.update({
-        where: {
-          id: runId,
-        },
-        data: {
-          status: "success",
-          finishedAt,
-        },
-      });
-    });
+    await completeWorkflowRun(runId);
   } catch (error) {
+    if (error instanceof WorkflowRunStateError) {
+      return getWorkflowRunById(runId);
+    }
+
     const message =
       error instanceof Error ? error.message : "Unknown workflow error";
 
-    await prisma.$transaction(async (tx) => {
-      await appendWorkflowLog(tx, runId, message, "error");
-
-      await tx.workflowRun.update({
-        where: {
-          id: runId,
-        },
-        data: {
-          status: "failed",
-          finishedAt: new Date(),
-          error: message,
-        },
-      });
-    });
+    await failWorkflowRun(runId, message);
   }
 
   return getWorkflowRunById(runId);
